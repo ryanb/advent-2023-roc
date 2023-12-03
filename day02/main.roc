@@ -2,6 +2,7 @@ app "advent-2023-roc-day02"
     packages { pf: "https://github.com/roc-lang/basic-cli/releases/download/0.5.0/Cufzl36_SnJ4QbOoEmiJ5dIpUxBvdB3NEySvuH82Wio.tar.br" }
     imports [
         pf.Stdout,
+        pf.Task,
         "input-full.txt" as inputFull : Str,
         "input-sample.txt" as inputSample : Str,
     ]
@@ -14,7 +15,8 @@ maxDict =
     |> Dict.insert "blue" 14
 
 main =
-    Stdout.line "Part 1: \(Num.toStr (part1 inputFull))"
+    _ <- Stdout.line "Part 1: \(Num.toStr (part1 inputFull))" |> Task.await
+    Stdout.line "Part 2: \(Num.toStr (part2 inputFull))"
 
 part1 = \input ->
     input
@@ -92,7 +94,7 @@ possibleCubeTypes = \cubeTypes -> cubeTypes |> List.all possibleCubeType
 
 possibleCubeType = \{color, amount} ->
     when Dict.get maxDict color is
-        Ok maxAmount -> maxAmount >= amount
+        Ok max -> max >= amount
         Err KeyNotFound -> crash "Unknown max for color: \(color)"
 
 expect
@@ -102,3 +104,54 @@ expect
 expect
     result = possibleCubeType {color: "red", amount: 100}
     result == Bool.false
+
+
+part2 = \input ->
+    input
+    |> Str.trim
+    |> Str.split "\n"
+    |> List.map parseGame
+    |> List.map maxAmounts
+    |> List.map multiplyAmounts
+    |> List.sum
+
+expect
+    result = part2 inputSample
+    result == 2286
+
+
+maxAmounts = \game ->
+    amounts = {red: 0, green: 0, blue: 0}
+    List.walk game.handfulls amounts \handfullAmounts, cubeTypes ->
+        List.walk cubeTypes handfullAmounts \cubeTypeAmounts, cubeType ->
+            maxAmount cubeTypeAmounts cubeType
+
+expect
+    game = {handfulls: [[{color: "red", amount: 5}], [{color: "red", amount: 3}]]}
+    result = maxAmounts game
+    result == {red: 5, green: 0, blue: 0}
+
+maxAmount = \amounts, {color, amount} ->
+    when color is
+        "red" ->
+            if amount > amounts.red then
+                {amounts & red: amount}
+            else
+                amounts
+        "green" ->
+            if amount > amounts.green then
+                {amounts & green: amount}
+            else
+                amounts
+        "blue" ->
+            if amount > amounts.blue then
+                {amounts & blue: amount}
+            else
+                amounts
+        _ -> crash "Unexpected color: \(color)"
+
+expect
+    result = maxAmount {red: 7, green: 0, blue: 0} {color: "red", amount: 8}
+    result == {red: 8, green: 0, blue: 0}
+
+multiplyAmounts = \{red, green, blue} -> red * green * blue
