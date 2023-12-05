@@ -16,7 +16,7 @@ numberWords = [
 
 numberElements = List.mapWithIndex numberWords \word, index ->
     num = index + 1
-    {num, digit: [Num.toStr num], letters: Str.graphemes word}
+    { num, digit: [Num.toStr num], letters: Str.graphemes word }
 
 process = \input ->
     input
