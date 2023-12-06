@@ -5,7 +5,7 @@ app "advent-2023-roc-day05"
     }
     imports [
         pf.Stdout,
-        # pf.Task,
+        pf.Task,
         "input-full.txt" as inputFull : Str,
         "input-sample.txt" as inputSample : Str,
         parser.String.{ parseStr, string, digits },
@@ -14,10 +14,12 @@ app "advent-2023-roc-day05"
     provides [main] to pf
 
 main =
-    # _ <- Stdout.line "Part 1: \(Num.toStr (part1 inputFull))" |> Task.await
-    # Stdout.line "Part 2: \(Num.toStr (part2 inputFull))"
-    Stdout.line "Part 1: \(Num.toStr (part1 inputFull))"
+    _ <- Stdout.line "Part 1: \(Num.toStr (part1 inputFull))" |> Task.await
+    Stdout.line "Part 2: \(Num.toStr (part2 inputFull))"
 
+#
+# PART 1
+#
 part1 = \input ->
     locations = input |> parseAlmanac |> seedLocations
     when List.min locations is
@@ -107,7 +109,7 @@ applyTable = \value, table ->
             Err OutOfRange -> Continue value
 
 applyRow = \value, row ->
-    if value >= row.source && value <= row.source + row.length then
+    if value >= row.source && value <= row.source + row.length - 1 then
         Ok (value - row.source + row.destination)
     else
         Err OutOfRange
@@ -119,10 +121,115 @@ expect
 
 expect
     row = { destination: 55, source: 5, length: 5 }
-    result = applyRow 11 row
+    result = applyRow 10 row
     result == Err OutOfRange
 
 expect
     row = { destination: 55, source: 5, length: 5 }
-    result = applyRow 10 row
-    result == Ok 60
+    result = applyRow 9 row
+    result == Ok 59
+
+#
+# PART 2
+#
+part2 = \input ->
+    almanac = input |> parseAlmanac
+    ranges = seedRanges almanac.seeds
+    locations = almanac.tables |> List.walk ranges processTable |> List.map .from
+    when List.min locations is
+        Ok result -> result
+        Err ListWasEmpty -> crash "No locations found"
+
+expect
+    result = part2 inputSample
+    result == 46
+
+seedRanges = \seeds ->
+    seeds |> List.chunksOf 2 |> List.map seedRange
+
+seedRange = \seeds ->
+    when seeds is
+        [from, length] -> { from, to: from + length - 1 }
+        _ -> crash "Unexpected number of seeds"
+
+processTable = \ranges, table ->
+    newQueue = table.rows |> List.walk { current: ranges, next: [] } processRow
+    List.concat newQueue.current newQueue.next
+
+processRow = \queue, row ->
+    toRange = { from: row.source, to: row.source + row.length - 1 }
+    queue.current
+    |> List.walk { current: [], next: queue.next } \newQueue, fromRange ->
+        { inside, outside } = fitRange fromRange toRange
+        if List.isEmpty inside then
+            { current: List.concat newQueue.current outside, next: newQueue.next }
+        else
+            next = convertRanges inside row
+            { current: List.concat newQueue.current outside, next: List.concat newQueue.next next }
+
+fitRange = \fromRange, toRange ->
+    if fromRange.to < toRange.from || fromRange.from > toRange.to then
+        # Fully outside
+        { inside: [], outside: [fromRange] }
+    else if fromRange.from >= toRange.from && fromRange.to <= toRange.to then
+        # Fully inside
+        { inside: [fromRange], outside: [] }
+    else if fromRange.from < toRange.from && fromRange.to <= toRange.to then
+        # Overlapping left side
+        outside = [{ from: fromRange.from, to: toRange.from - 1 }]
+        inside = [{ from: toRange.from, to: fromRange.to }]
+        { outside, inside }
+    else if fromRange.from >= toRange.from && fromRange.to > toRange.to then
+        # Overlapping right side
+        inside = [{ from: fromRange.from, to: toRange.to }]
+        outside = [{ from: toRange.to + 1, to: fromRange.to }]
+        { inside, outside }
+    else
+        # Overlapping both sides
+        inside = [{ from: toRange.from, to: toRange.to }]
+        outside = [
+            { from: fromRange.from, to: toRange.from - 1 },
+            { from: toRange.to + 1, to: fromRange.to },
+        ]
+        { inside, outside }
+
+# Fully outside left
+expect
+    result = fitRange { from: 10, to: 20 } { from: 30, to: 40 }
+    result == { inside: [], outside: [{ from: 10, to: 20 }] }
+
+# Fully outside right
+expect
+    result = fitRange { from: 30, to: 40 } { from: 10, to: 20 }
+    result == { inside: [], outside: [{ from: 30, to: 40 }] }
+
+# Fully inside
+expect
+    result = fitRange { from: 10, to: 20 } { from: 5, to: 25 }
+    result == { inside: [{ from: 10, to: 20 }], outside: [] }
+
+# Overlapping left side
+expect
+    result = fitRange { from: 10, to: 30 } { from: 20, to: 40 }
+    result == { inside: [{ from: 20, to: 30 }], outside: [{ from: 10, to: 19 }] }
+
+# Overlapping right side
+expect
+    result = fitRange { from: 20, to: 40 } { from: 10, to: 30 }
+    result == { inside: [{ from: 20, to: 30 }], outside: [{ from: 31, to: 40 }] }
+
+# Overlapping both sides
+expect
+    result = fitRange { from: 10, to: 40 } { from: 20, to: 30 }
+    result
+    == {
+        inside: [{ from: 20, to: 30 }],
+        outside: [{ from: 10, to: 19 }, { from: 31, to: 40 }],
+    }
+
+convertRanges = \ranges, row ->
+    ranges
+    |> List.map \range -> {
+        from: range.from - row.source + row.destination,
+        to: range.to - row.source + row.destination,
+    }
