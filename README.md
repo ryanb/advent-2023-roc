@@ -2,7 +2,7 @@
 
 Solutions for [Advent of Code 2023](https://adventofcode.com/2023) in [Roc](https://roc-lang.org) by Ryan Bates.
 
-This was done on Roc nightly build `roc_nightly-macos_apple_silicon-2023-11-29-eeab701df3`.
+This was done on Roc nightly build `roc_nightly-macos_apple_silicon-2023-12-06-9889984dd48`.
 
 
 ## Run

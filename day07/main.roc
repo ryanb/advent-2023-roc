@@ -1,6 +1,6 @@
 app "advent-2023-roc-day07"
     packages {
-        pf: "https://github.com/roc-lang/basic-cli/releases/download/0.5.0/Cufzl36_SnJ4QbOoEmiJ5dIpUxBvdB3NEySvuH82Wio.tar.br",
+        pf: "https://github.com/roc-lang/basic-cli/releases/download/0.7.0/bkGby8jb0tmZYsy2hg1E_B2QrCgcSTxdUlHtETwm5m4.tar.br",
         parser: "https://github.com/lukewilliamboswell/roc-parser/releases/download/0.3.0/-e3ebWWmlFPfe9fYrr2z1urfslzygbtQQsl69iH1qzQ.tar.br",
     }
     imports [
@@ -114,14 +114,7 @@ expect
 
 sortBy = \list, func ->
     List.sortWith list \a, b ->
-        aVal = func a
-        bVal = func b
-        if aVal < bVal then
-            LT
-        else if aVal > bVal then
-            GT
-        else
-            EQ
+        Num.compare (func a) (func b)
 
 okOrCrash = \result, error ->
     when result is
