@@ -7,13 +7,13 @@ app "advent-2023-roc-day08"
         pf.Stdout,
         # pf.Task,
         parser.Core.{
-            buildPrimitiveParser,
             apply,
             const,
             skip,
             maybe,
             oneOf,
             oneOrMore,
+            chompUntil,
             sepBy,
         },
         parser.String.{ parseStr, string },
@@ -27,7 +27,13 @@ Direction : [Left, Right]
 
 Directions : List Direction
 
-Nodes : Dict Str (Str, Str)
+LocationID : U16
+
+Location : List U8
+
+Node : { location : List U8, left : LocationID, right : LocationID }
+
+Nodes : Dict LocationID Node
 
 Map : { directions : Directions, nodes : Nodes }
 
@@ -36,10 +42,16 @@ main =
     # Stdout.line "Part 2: \(Num.toStr (part2 inputFull))"
     Stdout.line "Part 1: \(Num.toStr (part1 inputFull))"
 
+locationIdBase = 'Z' - 'A'
+
+firstLocationId = generateLocationId ['A', 'A', 'A']
+
+lastLocationId = generateLocationId ['Z', 'Z', 'Z']
+
 #
 # PART 1
 #
-part1 : Str -> I64
+part1 : Str -> U64
 part1 = \input ->
     input
     |> parseMap
@@ -61,10 +73,10 @@ parseMap = \input ->
         Err (ParsingIncomplete str) -> crash "Incomplete input: \(str)"
 
 expect
-    { directions, nodes } = parseMap "LR\n\nAAA = (BBB, CCC)\nBBB = (DDD, ZZZ)\n"
+    { directions, nodes } = parseMap "LR\n\nA = (B, C)\nB = (D, Z)\n"
     nodeKeys = Dict.keys nodes
     nodeValues = Dict.values nodes
-    directions == [Left, Right] && nodeKeys == ["AAA", "BBB"] && nodeValues == [("BBB", "CCC"), ("DDD", "ZZZ")]
+    directions == [Left, Right] && nodeKeys == [0, 1] && nodeValues == [{ location: ['A'], left: 1, right: 2 }, { location: ['B'], left: 3, right: 25 }]
 
 mapParser =
     const (\directions -> \nodesList -> { directions, nodes: convertNodes nodesList })
@@ -81,51 +93,49 @@ directionParser =
 
 nodeParser =
     const (\location -> \left -> \right -> { location, left, right })
-    |> apply (anyStringUntil ' ')
+    |> apply (chompUntil ' ')
     |> skip (string " = (")
-    |> apply (anyStringUntil ',')
+    |> apply (chompUntil ',')
     |> skip (string ", ")
-    |> apply (anyStringUntil ')')
+    |> apply (chompUntil ')')
     |> skip (string ")")
 
-# Based on parser chompUntil but returns a string instead of list of characters
-anyStringUntil = \char ->
-    buildPrimitiveParser \input ->
-        when List.findFirstIndex input (\x -> Bool.isEq x char) is
-            Ok index ->
-                sublist = List.sublist input { start: 0, len: index }
-                when Str.fromUtf8 sublist is
-                    Ok val -> Ok { val, input: List.dropFirst input index }
-                    Err _ -> Err (ParsingFailure "invalid char bytes")
-
-            Err _ -> Err (ParsingFailure "character not found")
-
-convertNodes : List { location : Str, left : Str, right : Str } -> Nodes
+convertNodes : List { location : Location, left : Location, right : Location } -> Nodes
 convertNodes = \nodesList ->
     nodesList
     |> List.walk (Dict.empty {}) \dict, node ->
-        dict |> Dict.insert node.location (node.left, node.right)
+        key = generateLocationId node.location
+        left = generateLocationId node.left
+        right = generateLocationId node.right
+        dict |> Dict.insert key { location: node.location, left, right }
 
-start : Map -> I64
+generateLocationId : Location -> LocationID
+generateLocationId = \chars ->
+    chars
+    |> List.reverse
+    |> List.walkWithIndex 0u16 \sum, char, index ->
+        sum + (Num.toU16 (char - 'A')) * (Num.powInt locationIdBase (Num.toU16 index))
+
+start : Map -> U64
 start = \map ->
-    recursiveStep map map.directions "AAA" 1i64
+    recursiveStep map map.directions firstLocationId 1u64
 
-recursiveStep : Map, Directions, Str, I64 -> I64
-recursiveStep = \map, directions, location, depth ->
-    newLocation = nextLocation map directions location
-    if newLocation == "ZZZ" then
+recursiveStep : Map, Directions, LocationID, U64 -> U64
+recursiveStep = \map, directions, locationId, depth ->
+    newLocationId = nextLocationId map directions locationId
+    if newLocationId == lastLocationId then
         depth
     else
         newDirections = nextDirections map directions
-        recursiveStep map newDirections newLocation (depth + 1)
+        recursiveStep map newDirections newLocationId (depth + 1)
 
-nextLocation : Map, Directions, Str -> Str
-nextLocation = \map, directions, location ->
-    (left, right) = map.nodes |> Dict.get location |> okOrCrash "Invalid location \(location)"
+nextLocationId : Map, Directions, LocationID -> LocationID
+nextLocationId = \map, directions, locationId ->
+    { left, right } = map.nodes |> Dict.get locationId |> okOrCrash "Invalid location \(Num.toStr locationId)"
     when directions |> List.first is
         Ok Left -> left
         Ok Right -> right
-        Err _ -> crash "No directions left"
+        Err _ -> crash "No directions remaining"
 
 nextDirections : Map, Directions -> Directions
 nextDirections = \map, directions ->
