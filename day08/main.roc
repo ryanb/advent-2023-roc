@@ -5,7 +5,7 @@ app "advent-2023-roc-day08"
     }
     imports [
         pf.Stdout,
-        # pf.Task,
+        pf.Task,
         parser.Core.{
             apply,
             const,
@@ -20,6 +20,7 @@ app "advent-2023-roc-day08"
         "input-full.txt" as inputFull : Str,
         "input-sample-1.txt" as inputSample1 : Str,
         "input-sample-2.txt" as inputSample2 : Str,
+        "input-sample-3.txt" as inputSample3 : Str,
     ]
     provides [main] to pf
 
@@ -31,31 +32,32 @@ LocationID : U16
 
 Location : List U8
 
-Node : { location : List U8, left : LocationID, right : LocationID }
+# The node type is just used for part 2
+NodeType : [StartNodeType, MiddleNodeType, EndNodeType]
+
+Node : { type : NodeType, left : LocationID, right : LocationID }
 
 Nodes : Dict LocationID Node
 
 Map : { directions : Directions, nodes : Nodes }
 
 main =
-    # _ <- Stdout.line "Part 1: \(Num.toStr (part1 inputFull))" |> Task.await
-    # Stdout.line "Part 2: \(Num.toStr (part2 inputFull))"
-    Stdout.line "Part 1: \(Num.toStr (part1 inputFull))"
+    _ <- Stdout.line "Part 1: \(Num.toStr (part1 inputFull))" |> Task.await
+    Stdout.line "Part 2: \(Num.toStr (part2 inputFull))"
 
 locationIdBase = 'Z' - 'A'
 
-firstLocationId = generateLocationId ['A', 'A', 'A']
+firstLocationId = parseLocationId ['A', 'A', 'A']
 
-lastLocationId = generateLocationId ['Z', 'Z', 'Z']
+finalLocationId = parseLocationId ['Z', 'Z', 'Z']
 
 #
 # PART 1
 #
 part1 : Str -> U64
 part1 = \input ->
-    input
-    |> parseMap
-    |> start
+    map = parseMap input
+    recursiveStep1 map map.directions firstLocationId 0u64
 
 expect
     result = part1 inputSample1
@@ -65,6 +67,82 @@ expect
     result = part1 inputSample2
     result == 6
 
+recursiveStep1 : Map, Directions, LocationID, U64 -> U64
+recursiveStep1 = \map, directions, locationId, depth ->
+    node = map.nodes |> Dict.get locationId |> okOrCrash "Invalid location \(Num.toStr locationId)"
+    newLocationId = nextLocationId directions node
+    if newLocationId == finalLocationId then
+        depth + 1
+    else
+        newDirections = nextDirections map directions
+        recursiveStep1 map newDirections newLocationId (depth + 1)
+
+nextLocationId : Directions, Node -> LocationID
+nextLocationId = \directions, node ->
+    when directions |> List.first is
+        Ok Left -> node.left
+        Ok Right -> node.right
+        Err _ -> crash "No directions remaining"
+
+nextDirections : Map, Directions -> Directions
+nextDirections = \map, directions ->
+    newDirections = directions |> List.dropFirst 1
+    if List.isEmpty newDirections then
+        map.directions
+    else
+        newDirections
+
+okOrCrash = \result, error ->
+    when result is
+        Ok value -> value
+        Err _ -> crash error
+
+#
+# PART 2
+#
+part2 : Str -> U64
+part2 = \input ->
+    map = parseMap input
+    startingLocationIds map.nodes
+    |> List.map \locationId -> recursiveStep2 map map.directions locationId 0u64
+    |> leastCommonMultipleInList
+
+expect
+    result = part2 inputSample3
+    result == 6
+
+startingLocationIds : Nodes -> List LocationID
+startingLocationIds = \nodes ->
+    nodes
+    |> Dict.keepIf \(_id, node) -> node.type == StartNodeType
+    |> Dict.keys
+
+recursiveStep2 : Map, Directions, LocationID, U64 -> U64
+recursiveStep2 = \map, directions, locationId, depth ->
+    node = map.nodes |> Dict.get locationId |> okOrCrash "Invalid location \(Num.toStr locationId)"
+    if node.type == EndNodeType then
+        depth
+    else
+        newLocationId = nextLocationId directions node
+        newDirections = nextDirections map directions
+        recursiveStep2 map newDirections newLocationId (depth + 1)
+
+leastCommonMultipleInList = \list ->
+    List.walk list 1 \lcm, num ->
+        leastCommonMultiple lcm num
+
+leastCommonMultiple = \a, b ->
+    (a * b) // (greatestCommonDivisor a b)
+
+greatestCommonDivisor = \a, b ->
+    if b == 0 then
+        a
+    else
+        greatestCommonDivisor b (a % b)
+
+#
+# Parser
+#
 parseMap : Str -> Map
 parseMap = \input ->
     when parseStr mapParser input is
@@ -76,7 +154,7 @@ expect
     { directions, nodes } = parseMap "LR\n\nA = (B, C)\nB = (D, Z)\n"
     nodeKeys = Dict.keys nodes
     nodeValues = Dict.values nodes
-    directions == [Left, Right] && nodeKeys == [0, 1] && nodeValues == [{ location: ['A'], left: 1, right: 2 }, { location: ['B'], left: 3, right: 25 }]
+    directions == [Left, Right] && nodeKeys == [0, 1] && nodeValues == [{ type: StartNodeType, left: 1, right: 2 }, { type: MiddleNodeType, left: 3, right: 25 }]
 
 mapParser =
     const (\directions -> \nodesList -> { directions, nodes: convertNodes nodesList })
@@ -104,48 +182,23 @@ convertNodes : List { location : Location, left : Location, right : Location } -
 convertNodes = \nodesList ->
     nodesList
     |> List.walk (Dict.empty {}) \dict, node ->
-        key = generateLocationId node.location
-        left = generateLocationId node.left
-        right = generateLocationId node.right
-        dict |> Dict.insert key { location: node.location, left, right }
+        key = parseLocationId node.location
+        left = parseLocationId node.left
+        right = parseLocationId node.right
+        type = parseNodeType node.location
+        dict |> Dict.insert key { type, left, right }
 
-generateLocationId : Location -> LocationID
-generateLocationId = \chars ->
+parseLocationId : Location -> LocationID
+parseLocationId = \chars ->
     chars
     |> List.reverse
     |> List.walkWithIndex 0u16 \sum, char, index ->
         sum + (Num.toU16 (char - 'A')) * (Num.powInt locationIdBase (Num.toU16 index))
 
-start : Map -> U64
-start = \map ->
-    recursiveStep map map.directions firstLocationId 1u64
-
-recursiveStep : Map, Directions, LocationID, U64 -> U64
-recursiveStep = \map, directions, locationId, depth ->
-    newLocationId = nextLocationId map directions locationId
-    if newLocationId == lastLocationId then
-        depth
-    else
-        newDirections = nextDirections map directions
-        recursiveStep map newDirections newLocationId (depth + 1)
-
-nextLocationId : Map, Directions, LocationID -> LocationID
-nextLocationId = \map, directions, locationId ->
-    { left, right } = map.nodes |> Dict.get locationId |> okOrCrash "Invalid location \(Num.toStr locationId)"
-    when directions |> List.first is
-        Ok Left -> left
-        Ok Right -> right
-        Err _ -> crash "No directions remaining"
-
-nextDirections : Map, Directions -> Directions
-nextDirections = \map, directions ->
-    newDirections = directions |> List.dropFirst 1
-    if List.isEmpty newDirections then
-        map.directions
-    else
-        newDirections
-
-okOrCrash = \result, error ->
-    when result is
-        Ok value -> value
-        Err _ -> crash error
+parseNodeType : Location -> NodeType
+parseNodeType = \chars ->
+    when chars |> List.last is
+        Ok 'A' -> StartNodeType
+        Ok 'Z' -> EndNodeType
+        Ok _ -> MiddleNodeType
+        Err _ -> crash "Unable to parse node type"
