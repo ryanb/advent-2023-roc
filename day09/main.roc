@@ -4,16 +4,15 @@ app "advent-2023-roc-day09"
     }
     imports [
         pf.Stdout,
-        # pf.Task,
+        pf.Task,
         "input-full.txt" as inputFull : Str,
         "input-sample.txt" as inputSample : Str,
     ]
     provides [main] to pf
 
 main =
-    # _ <- Stdout.line "Part 1: \(Num.toStr (part1 inputFull))" |> Task.await
-    # Stdout.line "Part 2: \(Num.toStr (part2 inputFull))"
-    Stdout.line "Part 1: \(Num.toStr (part1 inputFull))"
+    _ <- Stdout.line "Part 1: \(Num.toStr (part1 inputFull))" |> Task.await
+    Stdout.line "Part 2: \(Num.toStr (part2 inputFull))"
 
 #
 # PART 1
@@ -23,7 +22,7 @@ part1 = \input ->
     |> Str.trim
     |> Str.split "\n"
     |> List.map parseRow
-    |> List.map calculateMissingValue
+    |> List.map calculateNextMissingValue
     |> List.sum
 
 expect
@@ -37,16 +36,16 @@ parseRow = \line ->
     |> List.map \str ->
         Str.toI64 str |> okOrCrash "Unable to parse number \(str)"
 
-calculateMissingValue = \values ->
+calculateNextMissingValue = \values ->
     if List.all values \value -> value == 0 then
         0
     else
         lastValue = List.last values |> okOrCrash "Missing last value"
-        nextMissingValue = values |> differences |> calculateMissingValue
+        nextMissingValue = values |> differences |> calculateNextMissingValue
         lastValue + nextMissingValue
 
 expect
-    result = calculateMissingValue [1, 2, 4, 7]
+    result = calculateNextMissingValue [1, 2, 4, 7]
     result == 11
 
 differences : List (Num a) -> List (Num a)
@@ -58,6 +57,29 @@ differences = \values ->
 expect
     result = differences [1, 2, 4, 7]
     result == [1, 2, 3]
+
+#
+# PART 2
+#
+part2 = \input ->
+    input
+    |> Str.trim
+    |> Str.split "\n"
+    |> List.map parseRow
+    |> List.map calculatePreviousMissingValue
+    |> List.sum
+
+expect
+    result = part2 inputSample
+    result == 2
+
+calculatePreviousMissingValue = \values ->
+    if List.all values \value -> value == 0 then
+        0
+    else
+        firstValue = List.first values |> okOrCrash "Missing first value"
+        previousMissingValue = values |> differences |> calculatePreviousMissingValue
+        firstValue - previousMissingValue
 
 #
 # Utilities
