@@ -6,12 +6,12 @@
     {
       "label": "roc dev",
       "type": "shell",
-      "command": "roc format ${file}; time roc dev ${file}"
+      "command": "time roc dev ${file}"
     },
     {
       "label": "roc test",
       "type": "shell",
-      "command": "roc format ${file}; roc test ${file}"
+      "command": "roc test ${file}"
     }
   ]
 }
