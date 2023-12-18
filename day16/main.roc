@@ -5,7 +5,7 @@ app "advent-2023-roc-day16"
     }
     imports [
         pf.Stdout,
-        # pf.Task,
+        pf.Task,
         array2d.Array2D.{ Array2D },
         "input-full.txt" as inputFull : Str,
         "input-example-1.txt" as inputExample1 : Str,
@@ -18,9 +18,8 @@ Direction : [North, East, South, West]
 Beam : { location : Point, direction : Direction }
 
 main =
-    # _ <- Stdout.line "Part 1: \(Num.toStr (part1 inputFull))" |> Task.await
-    # Stdout.line "Part 2: \(Num.toStr (part2 inputFull))"
-    Stdout.line "Part 1: \(Num.toStr (part1 inputFull))"
+    _ <- Stdout.line "Part 1: \(Num.toStr (part1 inputFull))" |> Task.await
+    Stdout.line "Part 2: \(Num.toStr (part2 inputFull))"
 
 #
 # PART 1
@@ -171,6 +170,40 @@ parseTile = \tile ->
         "/" -> DiagonalForward
         "\\" -> DiagonalBackward
         _ -> crash "Invalid tile \(tile)"
+
+#
+# PART 2
+#
+part2 : Str -> Nat
+part2 = \input ->
+    tiles = input |> parseTiles
+    startingBeams tiles
+    |> List.map \beam -> recursiveBeams { tiles, beams: [beam], pastBeams: Set.empty {} }
+    |> List.map energizedTilesCount
+    |> List.max
+    |> orCrash "No beams found"
+
+startingBeams : Array2D Tile -> List Beam
+startingBeams = \tiles ->
+    shape = Array2D.shape tiles
+    dimensions = { x: shape.dimY, y: shape.dimX }
+    ys = List.range { start: At 0, end: Before dimensions.y }
+    xs = List.range { start: At 0, end: Before dimensions.y }
+    leftBeams = ys |> List.map \y -> { location: { x: 0, y }, direction: East }
+    rightBeams = ys |> List.map \y -> { location: { x: dimensions.x - 1, y }, direction: West }
+    topBeams = xs |> List.map \x -> { location: { x, y: 0 }, direction: South }
+    bottomBeams = xs |> List.map \x -> { location: { x, y: dimensions.y - 1 }, direction: North }
+    [leftBeams, rightBeams, topBeams, bottomBeams] |> List.join
+
+energizedTilesCount : Set Beam -> Nat
+energizedTilesCount = \beams ->
+    beams
+    |> Set.map \{ location } -> location
+    |> Set.len
+
+expect
+    result = part2 inputExample1
+    result == 51
 
 #
 # Utilities
